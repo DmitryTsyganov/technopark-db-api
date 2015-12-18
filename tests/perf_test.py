@@ -362,7 +362,7 @@ class User(ForumEntity):
             }
         location = '/%s/create/' % self.type
         if fill:
-            response = api.execute(location=location, query_dict=params, post=True, entity_id=self.id_attr_for_type)
+            response = api.execute(location=location, query_dict=params, post=True)
             state.add_user(params)
         else:
             return api.request(location=location, query_dict=params, post=True)
