@@ -83,13 +83,23 @@ class APIRequest(object):
         self.url_prefix = settings['url'].replace('ip', ip)
         self.errors = 0
 
-    def execute(self, location, query_dict, post=False):
+    @staticmethod
+    def __validate_entity(entity, field, request_message):
+        if field not in entity:
+            raise Exception("Parameter '" + field +
+                            "' is missing in your response. Actual response is "
+                            + str(entity) + '\n' + request_message)
+
+    def execute(self, location, query_dict, post=False, entity_id=None):
         url = self.url_prefix + location
         try:
             log.write('Requesting %s with %s (POST=%s)' % (url, query_dict, post))
             start = time.time()
             response = tools.Request(url, query_dict, post).get_response()
             req_time = time.time() - start
+            if entity_id:
+                self.__validate_entity(response, entity_id, 'Request was %s with %s (POST=%s)' % (url, query_dict, post))
+
             log.write('Request time was: %.4f sec' % req_time)
             return response
         except ValueError, e:
@@ -120,6 +130,10 @@ class ForumEntity(object):
 
     @property
     def unique_id(self):
+        return getattr(self, self.id_attr_for_type)
+    
+    @property
+    def id_attr_for_type(self):
         id_attr_for_type = {
             'forum': 'short_name',
             'thread': 'id',
@@ -127,8 +141,7 @@ class ForumEntity(object):
             'user': 'email',
         }
         cls = self.type
-        id_attr = id_attr_for_type[cls]
-        return getattr(self, id_attr)
+        return id_attr_for_type[cls]
 
     @property
     def params(self):
@@ -170,7 +183,7 @@ class Forum(ForumEntity):
         location = '/%s/create/' % self.type
         params['user'] = random.choice(state.users)
         if fill:
-            response = api.execute(location=location, query_dict=params, post=True)
+            response = api.execute(location=location, query_dict=params, post=True, entity_id=self.id_attr_for_type)
             state.add_forum(response)
         else:
             return api.request(location=location, query_dict=params, post=True)
@@ -203,7 +216,7 @@ class Thread(ForumEntity):
         
         location = '/%s/create/' % self.type
         if fill:
-            response = api.execute(location=location, query_dict=params, post=True)
+            response = api.execute(location=location, query_dict=params, post=True, entity_id=self.id_attr_for_type)
             state.add_thread(response)
             state.forum_for_thread[response['id']] = params['forum']
         else:
@@ -290,7 +303,7 @@ class Post(ForumEntity):
         else:
             params['parent'] = random.choice(avaliable_parents)
         if fill:
-            response = api.execute(location=location, query_dict=params, post=True)
+            response = api.execute(location=location, query_dict=params, post=True, entity_id=self.id_attr_for_type)
             state.add_post(response)
             state.posts_for_thread[params['thread']].append(response['id'])
         else:
@@ -349,7 +362,7 @@ class User(ForumEntity):
             }
         location = '/%s/create/' % self.type
         if fill:
-            response = api.execute(location=location, query_dict=params, post=True)
+            response = api.execute(location=location, query_dict=params, post=True, entity_id=self.id_attr_for_type)
             state.add_user(params)
         else:
             return api.request(location=location, query_dict=params, post=True)
